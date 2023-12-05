@@ -1,0 +1,116 @@
+﻿@model dotnetproject.Models.SpeechToTextModel
+
+@{
+    ViewBag.Title = "Speech to Text";
+}
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+
+<!-- Добавляем элементы для записи с микрофона -->
+<button id="startRecording">Start Recording</button>
+<button id="stopRecording">Stop Recording</button>
+
+<br />
+<button id="sendText">Send</button>
+
+
+<div>
+    <h3>Speech Text:</h3>
+    <div id="speechResults"></div>
+</div>
+
+<audio id="audioPlayer" controls style="display: none;"></audio>
+
+
+<div>
+    <h3>Answer:</h3>
+    <div id="answer"></div>
+</div>
+
+
+
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+
+<script>
+    var recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    var startRecordingButton = document.getElementById('startRecording');
+    var stopRecordingButton = document.getElementById('stopRecording');
+    var speechResultsDiv = document.getElementById('speechResults');
+
+    var sendTextButton = document.getElementById('sendText');
+    var answerDiv = document.getElementById('answer');
+
+
+    startRecordingButton.addEventListener('click', startRecording);
+    stopRecordingButton.addEventListener('click', stopRecording);
+
+    sendTextButton.addEventListener('click', sendText);
+    var finalTranscript = '';
+
+    function startRecording() {
+        recognition.start();
+        console.log('Recording started...');
+    }
+
+    function stopRecording() {
+        recognition.stop();
+        console.log('Recording stopped...');
+    }
+
+    recognition.onresult = function (event) {
+        var interimTranscript = '';
+  
+
+        for (var i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+        speechResultsDiv.innerHTML = '<p>Interim: ' + interimTranscript + '</p><p>Final: ' + finalTranscript + '</p>';
+    };
+
+    recognition.onerror = function (event) {
+        console.error('Speech recognition error:', event.error);
+    };
+
+    recognition.onend = function () {
+        console.log('Speech recognition ended...');
+    };
+
+
+
+
+    function sendText() {
+        // Send the finalTranscript to the server using an HTTP request (e.g., fetch or XMLHttpRequest)
+        fetch('/Home/SendText', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text: finalTranscript }),
+        })
+            .then(response => response.json())
+            .then(data => {
+                // Display the response in the answerDiv
+                answerDiv.innerHTML = '<p>Server Response: ' + data.answer + '</p>';
+                fetch('/Home/SynthesizeSpeech', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: data.answer }),
+                })
+                    .catch(error => console.error('Error triggering text-to-speech synthesis:', error));
+                finalTranscript = '';
+
+            })
+            .catch(error => console.error('Error sending text to server:', error));
+    }
+</script>
